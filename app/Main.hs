@@ -14,6 +14,7 @@ import qualified Data.Text.Zipper as TZ
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Network
+import Reflex.Process
 import Reflex.Vty
 
 type VtyExample t m =
@@ -53,6 +54,10 @@ main :: IO ()
 main = mainWidget $ withCtrlC $ do
   initManager_ $ do
     tabNavigation
+    keyPress <- keyCombos $ Set.fromList
+      [ (V.KEnter, [])
+      , (V.KChar ' ', [])
+      ]
     (active, nextEv) <- grout (fixed 4) $ row $ do
       rec
         active <- toggle False toggleStartEv
@@ -61,7 +66,7 @@ main = mainWidget $ withCtrlC $ do
               _ -> "Start"
         toggleStartEv <- tile flex $ textButton def (current startLabel)
       nEv <- tile flex $ textButtonStatic def "Next"
-      pure (active, nEv)
+      pure (active, leftmost [nEv, () <$ keyPress])
     tile flex $ boxTitle (constant def) "Transcribed Text" $ do
       outputDyn <- foldDyn (<>) "" $ mergeWith (<>)
         [nextEv $> "\129364"]

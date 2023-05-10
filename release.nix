@@ -5,6 +5,7 @@ let
   supportedSystems = [ "x86_64-linux" "x86_64-darwin" ];
   inherit (pkgs) lib;
   commonOverrides = self: super: {
+    reflex-process = pkgs.haskell.lib.doJailbreak super.reflex-process;
     reflex-vty = self.callHackageDirect {
       pkg = "reflex-vty";
       ver = "0.4.1.0";

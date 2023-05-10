@@ -36,6 +36,7 @@ executable vty-whisper
     base,
     containers,
     reflex,
+    reflex-process,
     reflex-vty,
     text,
     time,
