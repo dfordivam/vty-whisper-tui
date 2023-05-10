@@ -75,20 +75,25 @@ main = mainWidget $ withCtrlC $ do
       copyClipboardEv <- tile flex $ textButtonStatic def "Copy to clipboard"
       pure (active, gate (current active) (leftmost [nEv, () <$ keyPress]), copyClipboardEv)
     let stopEv = fforMaybe (updated active) $ \case
+          False -> Just ()
+          _ -> Nothing
+    let startEv = fforMaybe (updated active) $ \case
           True -> Just ()
           _ -> Nothing
-    nextEv :: Event t (Int, ()) <- numberOccurrences nextEv'
+    nextEv :: Event t (Int, ()) <- numberOccurrences (leftmost [startEv, nextEv'])
     let addNEv = ((\(k, _) -> Map.singleton k (Just ())) <$> nextEv)
     dResults <- listHoldWithKey mempty addNEv $ \k _ -> do
       fileName <- liftIO $ emptySystemTempFile "audio-"
       stopRecordEv <- headE (keyboardSignal <$ leftmost [nextEv', stopEv])
-      recordProc <- createProcess (proc "./record-audio.sh" [fileName]) $ def { _processConfig_signal = stopRecordEv }
+      recordProc <- createProcess (proc "parec" ["--file-format=wav", "--rate=16000", fileName]) $ def { _processConfig_signal = stopRecordEv }
       let copyAudioEv = _process_exit recordProc
-      copyAudioProc <- createProcess (proc "./copy-audio.sh" [fileName]) $ def
-      let transcribeAudioEv = _process_exit copyAudioProc
-      transcribeAudioProc <- createProcess (proc "./transcribe-audio.sh" [fileName]) $ def
-      let txtEv = T.decodeUtf8 <$> _process_stdout transcribeAudioProc
-      pure txtEv
+      ((switch . current) <$>) $ networkHold (pure never) $ ffor copyAudioEv $ \_ -> do
+        copyAudioProc <- createProcess (proc "./copy-audio.sh" [fileName]) $ def
+        let transcribeAudioEv = _process_exit copyAudioProc
+        ((switch . current) <$>) $ networkHold (pure never) $ ffor transcribeAudioEv $ \_ -> do
+          transcribeAudioProc <- createProcess (proc "./transcribe-audio.sh" [fileName]) $ def
+          let txtEv = T.decodeUtf8 <$> _process_stdout transcribeAudioProc
+          pure txtEv
     (addTxtEv, addTxtAction) <- newTriggerEvent
     networkView $ ffor dResults $ \m -> forM (Map.assocs m) $ \(k, ev) -> do
       performEvent $ ffor ev $ \txt -> liftIO (addTxtAction (k, txt))
