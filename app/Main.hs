@@ -3,6 +3,7 @@ module Main where
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Fix
+import Control.Monad.IO.Class
 import Data.Functor
 import Data.Functor.Misc
 import Data.Map (Map)
@@ -13,6 +14,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Zipper as TZ
 import qualified Graphics.Vty as V
 import Reflex
+import Reflex.Collection
 import Reflex.Network
 import Reflex.Process
 import Reflex.Vty
@@ -58,7 +60,7 @@ main = mainWidget $ withCtrlC $ do
       [ (V.KEnter, [])
       , (V.KChar ' ', [])
       ]
-    (active, nextEv) <- grout (fixed 4) $ row $ do
+    (active, nextEv') <- grout (fixed 4) $ row $ do
       rec
         active <- toggle False toggleStartEv
         let startLabel = ffor active $ \case
@@ -66,8 +68,22 @@ main = mainWidget $ withCtrlC $ do
               _ -> "Start"
         toggleStartEv <- tile flex $ textButton def (current startLabel)
       nEv <- tile flex $ textButtonStatic def "Next"
-      pure (active, leftmost [nEv, () <$ keyPress])
+      pure (active, gate (current active) (leftmost [nEv, () <$ keyPress]))
+    let stopEv = fforMaybe (updated active) $ \case
+          True -> Just ()
+          _ -> Nothing
+    nextEv :: Event t (Int, ()) <- numberOccurrences nextEv'
+    let addNEv = ((\(k, _) -> Map.singleton k (Just ())) <$> nextEv)
+    dResults <- listHoldWithKey mempty addNEv $ \k _ -> do
+      ev <- tile flex $ textButtonStatic def ("Doing " <> tshow k)
+      pure (tshow k <$ ev)
+    (addTxtEv, addTxtAction) <- newTriggerEvent
+    networkView $ ffor dResults $ \m -> forM (Map.assocs m) $ \(k, ev) -> do
+      performEvent $ ffor ev $ \txt -> liftIO (addTxtAction (k, txt))
+    processedTxtx <- foldDyn (<>) mempty (uncurry Map.singleton <$> addTxtEv)
     tile flex $ boxTitle (constant def) "Transcribed Text" $ do
-      outputDyn <- foldDyn (<>) "" $ mergeWith (<>)
-        [nextEv $> "\129364"]
-      text (current outputDyn)
+      let outputDyn = ffor processedTxtx $ Map.foldlWithKey (\(pk, pt) k t -> if k == (pk + 1) then (k, pt <> t) else (pk, pt)) (-1, "")
+      text $ current (snd <$> outputDyn)
+
+tshow :: (Show a) => a -> Text
+tshow = T.pack . show
