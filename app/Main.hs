@@ -53,8 +53,16 @@ main :: IO ()
 main = mainWidget $ withCtrlC $ do
   initManager_ $ do
     tabNavigation
-    a <- tile flex $ btn "POTATO"
-    tile (fixed 7) $ boxTitle (constant def) "Transcribed Text" $ do
+    (active, nextEv) <- grout (fixed 4) $ row $ do
+      rec
+        active <- toggle False toggleStartEv
+        let startLabel = ffor active $ \case
+              True -> "Stop"
+              _ -> "Start"
+        toggleStartEv <- tile flex $ textButton def (current startLabel)
+      nEv <- tile flex $ textButtonStatic def "Next"
+      pure (active, nEv)
+    tile flex $ boxTitle (constant def) "Transcribed Text" $ do
       outputDyn <- foldDyn (<>) "" $ mergeWith (<>)
-        [a $> "\129364"]
+        [nextEv $> "\129364"]
       text (current outputDyn)
