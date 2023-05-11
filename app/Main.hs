@@ -111,7 +111,7 @@ main = mainWidget $ withCtrlC $ do
         accumTxtFn (Right (k, v)) m = Map.singleton k v <> m
     processedTxtx <- foldDyn accumTxtFn mempty (leftmost [Right <$> addTxtEv, Left <$> clearEv])
     tile flex $ boxTitle (constant def) "Transcribed Text" $ do
-      let outputTxt = current $ (snd <$>) $ ffor processedTxtx $ Map.foldlWithKey (\(pk, pt) k t -> if k == (pk + 1) then (k, pt <> t) else (pk, pt)) (-1, "")
+      let outputTxt = current $ ffor processedTxtx $ Map.foldl (<>) ""
       networkHold blank $ ffor (tag outputTxt copyClipboardEv) $ \txt -> do
         pb <- getPostBuild
         stdinEv <- delay 0.5 (SendPipe_LastMessage (T.encodeUtf8 txt) <$ pb)
