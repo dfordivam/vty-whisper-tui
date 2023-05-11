@@ -85,7 +85,7 @@ main = mainWidget $ withCtrlC $ do
     dResults <- listHoldWithKey mempty addNEv $ \k _ -> do
       fileName <- liftIO $ emptySystemTempFile "audio-"
       stopRecordEv <- headE (keyboardSignal <$ leftmost [nextEv', stopEv])
-      recordProc <- createProcess (proc "parec" ["--file-format=wav", "--rate=16000", fileName]) $ def { _processConfig_signal = stopRecordEv }
+      recordProc <- createProcess (proc "./record-audio.sh" [fileName]) $ def { _processConfig_signal = stopRecordEv }
       let copyAudioEv = _process_exit recordProc
       ((switch . current) <$>) $ networkHold (pure never) $ ffor copyAudioEv $ \_ -> do
         copyAudioProc <- createProcess (proc "./copy-audio.sh" [fileName]) $ def
