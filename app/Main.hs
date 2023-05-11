@@ -12,6 +12,7 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified Data.Text.IO as T
 import qualified Data.Text.Zipper as TZ
 import qualified Graphics.Vty as V
 import Reflex
@@ -19,6 +20,9 @@ import Reflex.Collection
 import Reflex.Network
 import Reflex.Process
 import Reflex.Vty
+
+import System.Directory
+import System.IO
 import System.IO.Temp
 import System.Posix.Signals
 import System.Process hiding (createProcess)
@@ -64,7 +68,7 @@ main = mainWidget $ withCtrlC $ do
       [ (V.KEnter, [])
       , (V.KChar ' ', [])
       ]
-    (active, nextEv', copyClipboardEv) <- grout (fixed 4) $ row $ do
+    (active, nextEv', copyClipboardEv, saveToFileEv) <- grout (fixed 4) $ row $ do
       rec
         active <- toggle False toggleStartEv
         let startLabel = ffor active $ \case
@@ -73,7 +77,8 @@ main = mainWidget $ withCtrlC $ do
         toggleStartEv <- tile flex $ textButton def (current startLabel)
       nEv <- tile flex $ textButtonStatic def "Next"
       copyClipboardEv <- tile flex $ textButtonStatic def "Copy to clipboard"
-      pure (active, gate (current active) (leftmost [nEv, () <$ keyPress]), copyClipboardEv)
+      saveToFileEv <- tile flex $ textButtonStatic def "Save to file"
+      pure (active, gate (current active) (leftmost [nEv, () <$ keyPress]), copyClipboardEv, saveToFileEv)
     let stopEv = fforMaybe (updated active) $ \case
           False -> Just ()
           _ -> Nothing
@@ -100,11 +105,16 @@ main = mainWidget $ withCtrlC $ do
     processedTxtx <- foldDyn (<>) mempty (uncurry Map.singleton <$> addTxtEv)
     tile flex $ boxTitle (constant def) "Transcribed Text" $ do
       let outputTxt = current $ (snd <$>) $ ffor processedTxtx $ Map.foldlWithKey (\(pk, pt) k t -> if k == (pk + 1) then (k, pt <> t) else (pk, pt)) (-1, "")
-      let doCopyClipboardEv = tag outputTxt copyClipboardEv
-      networkHold blank $ ffor doCopyClipboardEv $ \txt -> do
+      networkHold blank $ ffor (tag outputTxt copyClipboardEv) $ \txt -> do
         pb <- getPostBuild
         stdinEv <- delay 0.5 (SendPipe_LastMessage (T.encodeUtf8 txt) <$ pb)
         void $ createProcess (proc "./copy-to-clipboard.sh" []) $ def { _processConfig_stdin = stdinEv }
+      performEvent $ ffor (tag outputTxt saveToFileEv) $ \txt -> void $ liftIO $ do
+        dir <- getCurrentDirectory
+        (_, handle) <- openTempFile dir "transcript.txt"
+        T.hPutStr handle txt
+        hClose handle
+
       text outputTxt
 
 tshow :: (Show a) => a -> Text
