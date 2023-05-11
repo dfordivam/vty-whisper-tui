@@ -67,10 +67,13 @@ main = mainWidget $ withCtrlC $ do
     keyPress <- keyCombos $ Set.fromList
       [ (V.KEnter, [])
       , (V.KChar ' ', [])
+      , (V.KEsc, [])
       ]
+    let doStartStopEv = () <$ (ffilter (\(k, _) -> k == V.KEsc || k == V.KEnter) keyPress)
+        doNextEv = () <$ (ffilter ((== V.KChar ' ') . fst) keyPress)
     (active, nextEv', copyClipboardEv, saveToFileEv) <- grout (fixed 4) $ row $ do
       rec
-        active <- toggle False toggleStartEv
+        active <- toggle False (leftmost [doStartStopEv, toggleStartEv])
         let startLabel = ffor active $ \case
               True -> "Stop"
               _ -> "Start"
@@ -78,7 +81,7 @@ main = mainWidget $ withCtrlC $ do
       nEv <- tile flex $ textButtonStatic def "Next"
       copyClipboardEv <- tile flex $ textButtonStatic def "Copy to clipboard"
       saveToFileEv <- tile flex $ textButtonStatic def "Save to file"
-      pure (active, gate (current active) (leftmost [nEv, () <$ keyPress]), copyClipboardEv, saveToFileEv)
+      pure (active, gate (current active) (leftmost [nEv, doNextEv]), copyClipboardEv, saveToFileEv)
     let stopEv = fforMaybe (updated active) $ \case
           False -> Just ()
           _ -> Nothing
