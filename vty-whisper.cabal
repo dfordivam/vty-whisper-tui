@@ -35,6 +35,7 @@ executable vty-whisper
   build-depends:
     base,
     containers,
+    directory,
     reflex,
     reflex-process,
     reflex-vty,
