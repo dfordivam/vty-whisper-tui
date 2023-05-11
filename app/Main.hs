@@ -97,7 +97,7 @@ main = mainWidget $ withCtrlC $ do
         let transcribeAudioEv = _process_exit copyAudioProc
         ((switch . current) <$>) $ networkHold (pure never) $ ffor transcribeAudioEv $ \_ -> do
           transcribeAudioProc <- createProcess (proc "./transcribe-audio.sh" [fileName]) $ def
-          let txtEv = T.decodeUtf8 <$> _process_stdout transcribeAudioProc
+          let txtEv = T.strip . T.decodeUtf8 <$> _process_stdout transcribeAudioProc
           pure txtEv
     (addTxtEv, addTxtAction) <- newTriggerEvent
     networkView $ ffor dResults $ \m -> forM (Map.assocs m) $ \(k, ev) -> do
