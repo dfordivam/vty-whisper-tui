@@ -71,7 +71,7 @@ main = mainWidget $ withCtrlC $ do
       ]
     let doStartStopEv = () <$ (ffilter (\(k, _) -> k == V.KEsc || k == V.KEnter) keyPress)
         doNextEv = () <$ (ffilter ((== V.KChar ' ') . fst) keyPress)
-    (active, nextEv', copyClipboardEv, saveToFileEv) <- grout (fixed 4) $ row $ do
+    (active, nextEv', copyClipboardEv, saveToFileEv, clearEv) <- grout (fixed 4) $ row $ do
       rec
         active <- toggle False (leftmost [doStartStopEv, toggleStartEv])
         let startLabel = ffor active $ \case
@@ -81,7 +81,8 @@ main = mainWidget $ withCtrlC $ do
       nEv <- tile flex $ textButtonStatic def "Next"
       copyClipboardEv <- tile flex $ textButtonStatic def "Copy to clipboard"
       saveToFileEv <- tile flex $ textButtonStatic def "Save to file"
-      pure (active, gate (current active) (leftmost [nEv, doNextEv]), copyClipboardEv, saveToFileEv)
+      clearEv <- tile flex $ textButtonStatic def "Clear"
+      pure (active, gate (current active) (leftmost [nEv, doNextEv]), copyClipboardEv, saveToFileEv, clearEv)
     let stopEv = fforMaybe (updated active) $ \case
           False -> Just ()
           _ -> Nothing
@@ -105,7 +106,10 @@ main = mainWidget $ withCtrlC $ do
     (addTxtEv, addTxtAction) <- newTriggerEvent
     networkView $ ffor dResults $ \m -> forM (Map.assocs m) $ \(k, ev) -> do
       performEvent $ ffor ev $ \txt -> liftIO (addTxtAction (k, txt))
-    processedTxtx <- foldDyn (<>) mempty (uncurry Map.singleton <$> addTxtEv)
+
+    let accumTxtFn (Left _) _ = mempty
+        accumTxtFn (Right (k, v)) m = Map.singleton k v <> m
+    processedTxtx <- foldDyn accumTxtFn mempty (leftmost [Right <$> addTxtEv, Left <$> clearEv])
     tile flex $ boxTitle (constant def) "Transcribed Text" $ do
       let outputTxt = current $ (snd <$>) $ ffor processedTxtx $ Map.foldlWithKey (\(pk, pt) k t -> if k == (pk + 1) then (k, pt <> t) else (pk, pt)) (-1, "")
       networkHold blank $ ffor (tag outputTxt copyClipboardEv) $ \txt -> do
