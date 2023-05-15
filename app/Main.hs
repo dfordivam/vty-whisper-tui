@@ -71,18 +71,21 @@ main = mainWidget $ withCtrlC $ do
       ]
     let doStartStopEv = () <$ (ffilter (\(k, _) -> k == V.KEsc || k == V.KEnter) keyPress)
         doNextEv = () <$ (ffilter ((== V.KChar ' ') . fst) keyPress)
-    (active, nextEv', copyClipboardEv, saveToFileEv, clearEv) <- grout (fixed 4) $ row $ do
-      rec
-        active <- toggle False (leftmost [doStartStopEv, toggleStartEv])
-        let startLabel = ffor active $ \case
-              True -> "Stop"
-              _ -> "Start"
-        toggleStartEv <- tile flex $ textButton def (current startLabel)
+        toggleButton lblOff lblOn extraToggleEv = mdo
+          active <- toggle False (leftmost [extraToggleEv, toggleEv])
+          let dLabel = ffor active $ \case
+                True -> lblOn
+                _ -> lblOff
+          toggleEv <- tile flex $ textButton def (current dLabel)
+          pure active
+    (active, doRemoteTranscribe, nextEv', copyClipboardEv, saveToFileEv, clearEv) <- grout (fixed 4) $ row $ do
+      active <- toggleButton "Start" "Stop" doStartStopEv
       nEv <- tile flex $ textButtonStatic def "Next"
+      doRemoteTranscribe <- toggleButton "Do Remote" "Do Local" never
       copyClipboardEv <- tile flex $ textButtonStatic def "Copy to clipboard"
       saveToFileEv <- tile flex $ textButtonStatic def "Save to file"
       clearEv <- tile flex $ textButtonStatic def "Clear"
-      pure (active, gate (current active) (leftmost [nEv, doNextEv]), copyClipboardEv, saveToFileEv, clearEv)
+      pure (active, doRemoteTranscribe, gate (current active) (leftmost [nEv, doNextEv]), copyClipboardEv, saveToFileEv, clearEv)
     let stopEv = fforMaybe (updated active) $ \case
           False -> Just ()
           _ -> Nothing
@@ -95,14 +98,19 @@ main = mainWidget $ withCtrlC $ do
       fileName <- liftIO $ emptySystemTempFile "audio-"
       stopRecordEv <- headE (keyboardSignal <$ leftmost [nextEv', stopEv])
       recordProc <- createProcess (proc "./record-audio.sh" [fileName]) $ def { _processConfig_signal = stopRecordEv }
-      let copyAudioEv = _process_exit recordProc
-      ((switch . current) <$>) $ networkHold (pure never) $ ffor copyAudioEv $ \_ -> do
-        copyAudioProc <- createProcess (proc "./copy-audio.sh" [fileName]) $ def
-        let transcribeAudioEv = _process_exit copyAudioProc
-        ((switch . current) <$>) $ networkHold (pure never) $ ffor transcribeAudioEv $ \_ -> do
-          transcribeAudioProc <- createProcess (proc "./transcribe-audio.sh" [fileName]) $ def
+      let copyAudioEv = tag (current doRemoteTranscribe) $ _process_exit recordProc
+      ((switch . current) <$>) $ networkHold (pure never) $ ffor copyAudioEv $ \case
+        False -> do
+          transcribeAudioProc <- createProcess (proc "./local-transcribe-audio.sh" [fileName]) $ def
           let txtEv = T.stripStart . T.decodeUtf8 <$> _process_stdout transcribeAudioProc
           pure txtEv
+        True -> do
+          copyAudioProc <- createProcess (proc "./copy-audio.sh" [fileName]) $ def
+          let transcribeAudioEv = _process_exit copyAudioProc
+          ((switch . current) <$>) $ networkHold (pure never) $ ffor transcribeAudioEv $ \_ -> do
+            transcribeAudioProc <- createProcess (proc "./transcribe-audio.sh" [fileName]) $ def
+            let txtEv = T.stripStart . T.decodeUtf8 <$> _process_stdout transcribeAudioProc
+            pure txtEv
     (addTxtEv, addTxtAction) <- newTriggerEvent
     networkView $ ffor dResults $ \m -> forM (Map.assocs m) $ \(k, ev) -> do
       performEvent $ ffor ev $ \txt -> liftIO (addTxtAction (k, txt))
