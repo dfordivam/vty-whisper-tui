@@ -96,7 +96,8 @@ main = mainWidget $ withCtrlC $ do
     let addNEv = ((\(k, _) -> Map.singleton k (Just ())) <$> nextEv)
     dResults <- listHoldWithKey mempty addNEv $ \k _ -> do
       fileName <- liftIO $ emptySystemTempFile "audio-"
-      stopRecordEv <- headE (keyboardSignal <$ leftmost [nextEv', stopEv])
+      autoStopEv <- delay 300 =<< getPostBuild -- After 5 minutes
+      stopRecordEv <- headE (keyboardSignal <$ leftmost [nextEv', stopEv, autoStopEv])
       recordProc <- createProcess (proc "./record-audio.sh" [fileName]) $ def { _processConfig_signal = stopRecordEv }
       let copyAudioEv = tag (current doRemoteTranscribe) $ _process_exit recordProc
       ((switch . current) <$>) $ networkHold (pure never) $ ffor copyAudioEv $ \case
