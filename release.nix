@@ -4,6 +4,13 @@ let
   pkgs = (reflex-platform {}).nixpkgs;
   supportedSystems = [ "x86_64-linux" "x86_64-darwin" ];
   inherit (pkgs) lib;
+
+  src = lib.sourceByRegex ./. [
+    "^vty-whisper\.cabal$"
+    "^app$"
+    "^app/Main\.hs$"
+  ];
+
   # commonOverrides = self: super: {
   #   reflex-process = pkgs.haskell.lib.doJailbreak super.reflex-process;
   #   reflex-vty = self.callHackageDirect {
@@ -48,6 +55,6 @@ in
   in
   {
     recurseForDerivations = true;
-    ghc810 = rpGhc.callCabal2nix "vty-whisper" (import ./src.nix) {};
-    ghc967 = nixGhc967.callCabal2nix "vty-whisper" (import ./src.nix) {};
+    ghc810 = rpGhc.callCabal2nix "vty-whisper" src {};
+    ghc967 = nixGhc967.callCabal2nix "vty-whisper" src {};
   })
