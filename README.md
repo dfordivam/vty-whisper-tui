@@ -27,6 +27,6 @@ Once these scripts work on your system, start the app using nix-shell
 
 `nix-shell --run 'cabal run'`
 
-
+`nix-shell run.nix --arg enableVulkan true --run vty-whisper`
 
 
