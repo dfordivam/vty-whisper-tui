@@ -1,4 +1,4 @@
-# vty-whisper-via-remote
+# vty-whisper-tui
 
 This is a CLI/TUI app for doing semi real-time transcription of speech (STT).
 It currently makes use of [whisper-cpp](https://github.com/ggml-org/whisper.cpp), but could be modified to use any other tool which can transcribe an audio file.
